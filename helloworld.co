@@ -1,0 +1,12 @@
+# helloworld.co
+
+def _start() -> void:
+    # Wir definieren den String
+    let msg: ptr<u8> = "Hello Cobra World!\nThis is the first ever real compiled Cobra Code!\n"
+
+    # Syscall 1 ist 'write' unter Linux x86_64
+    # Argumente: (1=write, 1=stdout, puffer, länge)
+    syscall(1, 1, msg, 70)
+    # Syscall 60 ist 'exit' unter Linux x86_64
+    # Argumente: (60=exit, status=0, 0, 0)
+    syscall(60, 0, 0, 0)
