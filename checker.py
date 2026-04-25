@@ -4,6 +4,8 @@ from parser import Parser
 BUILTINS = {
     "syscall",
     "cast",
+    "print",
+    "alloc",
 }
 
 # typechecker.py
@@ -17,15 +19,20 @@ class TypeError(Exception):
     def __str__(self):
         return f"\nCobraTypeError: {self.message} (Zeile {self.line})\n"
 
-
 class TypeChecker:
     def __init__(self, tree: Program):
-        self.tree  = tree
-        self.scope = {}   # name → type
-        self.funcs = {}   # name → (params, return_type)
+        self.tree = tree
+        self.scope = {}
+        self.funcs = {}
+        self.structs = {}  # name → {field: type}
 
     def check(self):
-        # Erst alle Funktionssignaturen registrieren
+        # Erst Structs registrieren
+        for node in self.tree.body:
+            if isinstance(node, StructDef):
+                self.structs[node.name] = dict(node.fields)
+
+        # Dann Funktionssignaturen
         for node in self.tree.body:
             if isinstance(node, FuncDef):
                 self.funcs[node.name] = (node.params, node.return_type)
@@ -43,6 +50,10 @@ class TypeChecker:
             self.check_return(node)
         elif isinstance(node, IfStmt):
             self.check_if(node)
+        elif isinstance(node, WhileStmt):
+            self.check_while(node)
+        elif isinstance(node, StructDef):
+            pass  # bereits registriert
         else:
             self.infer_type(node)
 
@@ -53,9 +64,18 @@ class TypeChecker:
         for stmt in node.body:
             self.check_node(stmt)
 
+    def check_while(self, node: WhileStmt):
+        self.infer_type(node.condition)
+        for stmt in node.body:
+            self.check_node(stmt)
+
     def check_let(self, node: LetStmt):
         value_type = self.infer_type(node.value)
-        if value_type != node.type:
+        # alloc gibt immer einen ptr zurück — Typ vom let übernehmen
+        if isinstance(node.value, FuncCall) and node.value.name == "alloc":
+            self.scope[node.name] = node.type
+            return
+        if value_type != node.type and node.type not in self.structs:
             raise TypeError(
                 f"Typ-Mismatch: '{node.name}' ist {node.type}, aber Wert ist {value_type}",
                 line=0
@@ -63,7 +83,7 @@ class TypeChecker:
         self.scope[node.name] = node.type
 
     def check_return(self, node: ReturnStmt):
-        self.infer_type(node.value)  # prüft ob Wert gültig ist
+        self.infer_type(node.value)  # prüft, ob Wert gültig ist
 
     def check_if(self, node: IfStmt):
         self.infer_type(node.condition)
@@ -77,10 +97,33 @@ class TypeChecker:
         if isinstance(node, Number):
             return "i32"
 
+        if isinstance(node, StructLit):
+            if node.name not in self.structs:
+                raise TypeError(f"Unbekannter Struct '{node.name}'")
+            return node.name
+
+        if isinstance(node, IndexAccess):
+            obj_type = self.infer_type(node.obj)
+            # ptr<i32>[i] → i32
+            if obj_type.startswith("ptr<"):
+                return obj_type[4:-1]  # ptr<i32> → i32
+            raise TypeError(f"'{obj_type}' ist nicht indexierbar")
+
+        if isinstance(node, MemberAccess):
+            obj_type = self.infer_type(node.obj)
+            if obj_type not in self.structs:
+                raise TypeError(f"'{obj_type}' ist kein Struct")
+            fields = self.structs[obj_type]
+            if node.member not in fields:
+                raise TypeError(f"Struct '{obj_type}' hat kein Feld '{node.member}'")
+            return fields[node.member]
+
         if isinstance(node, FuncCall):
             if node.name in BUILTINS:
                 if node.name == "syscall": return "i64"
                 if node.name == "cast":    return "ptr<u8>"  # Platzhalter
+                if node.name == "print": return "void"
+                if node.name == "alloc": return "ptr<i32>"
 
             if node.name not in self.funcs:
                 raise TypeError(f"Unbekannte Funktion '{node.name}'")

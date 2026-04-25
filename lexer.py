@@ -11,7 +11,7 @@ KEYWORDS = {
     'def', 'let', 'return',
     'if', 'else', 'elif',
     'while', 'for',
-    'struct', 'unsafe', 'import'
+    'struct', 'unsafe', 'import', 'print'
 }
 
 TOKEN_PATTERNS = [
@@ -29,6 +29,9 @@ TOKEN_PATTERNS = [
     ("RBRACE",   r"\}"),
     ("NEWLINE",  r"\n"),
     ("SPACE",    r"[ \t]+"),
+    ("DOT",      r"\."),
+    ("LBRACKET", r"\["),
+    ("RBRACKET", r"\]"),
 ]
 
 MASTER = "|".join(f"(?P<{n}>{p})" for n, p in TOKEN_PATTERNS)

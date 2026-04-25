@@ -34,6 +34,11 @@ class IfStmt(Node):
         self.then_body = then_body
         self.else_body = else_body
 
+class WhileStmt(Node):
+    def __init__(self, condition, body):
+        self.condition = condition
+        self.body      = body
+
 class BinOp(Node):
     def __init__(self, left, op, right):
         self.left  = left
@@ -56,6 +61,26 @@ class FuncCall(Node):
     def __init__(self, name, args):
         self.name = name
         self.args = args
+
+class StructDef(Node):
+    def __init__(self, name, fields):
+        self.name = name
+        self.fields = fields
+
+class StructLit(Node):
+    def __init__(self, name, fields):
+        self.name = name
+        self.fields = fields
+
+class MemberAccess(Node):
+    def __init__(self, obj, member):
+        self.obj = obj
+        self.member = member
+
+class IndexAccess(Node):
+    def __init__(self, obj, index):
+        self.obj    =   obj
+        self.index  =   index
 
 # --- Parser ---
 
@@ -88,6 +113,23 @@ class Parser:
             self.skip("NEWLINE")
         return Program(body)
 
+    def parse_struct(self):
+        self.eat("KEYWORD", "struct")
+        name = self.eat("IDENT").value
+        self.eat("COLON")
+        fields = []
+        self.skip("NEWLINE")
+        self.eat("INDENT")
+        self.skip("NEWLINE")
+        while self.peek().type not in ("DEDENT", "EOF"):
+            fname = self.eat("IDENT").value
+            self.eat("COLON")
+            ftype = self.parse_type()
+            fields.append((fname, ftype))
+            self.skip("NEWLINE")
+        self.eat("DEDENT")
+        return StructDef(name, fields)
+
     def parse_statement(self):
         tok = self.peek()
 
@@ -100,8 +142,22 @@ class Parser:
                 return self.parse_return()
             if tok.value == "if":
                 return self.parse_if()
+            if tok.value == "while":
+                return self.parse_while()
+            if tok.value == "print":
+                return self.parse_print()
+            if tok.value == "struct":
+                return self.parse_struct()
 
         return self.parse_expr()
+
+    def parse_print(self):
+        self.eat("KEYWORD", "print")
+        self.eat("LPAREN")
+        arg = self.parse_expr()
+        self.eat("RPAREN")
+        return FuncCall("print", [arg])
+
 
     def parse_funcdef(self):
         self.eat("KEYWORD", "def")
@@ -157,15 +213,27 @@ class Parser:
 
         return IfStmt(condition, then_body, else_body)
 
+    def parse_while(self):
+        self.eat("KEYWORD", "while")
+        condition = self.parse_expr()
+        self.eat("COLON")
+        body = self.parse_block()
+        return WhileStmt(condition, body)
+
     def parse_type(self) -> str:
-        t = self.eat("TYPE").value
-        # Wenn ein < folgt, lesen wir den generischen Teil (z.B. <u8>)
-        if self.peek().value == "<":
-            self.eat("OP", "<")
-            inner = self.parse_type()  # Rekursiv für verschachtelte Typen
-            self.eat("OP", ">")
-            return f"{t}<{inner}>"
-        return t
+        # Eingebauter Typ
+        if self.peek().type == "TYPE":
+            t = self.eat("TYPE").value
+            if self.peek().value == "<":
+                self.eat("OP", "<")
+                inner = self.parse_type()
+                self.eat("OP", ">")
+                return f"{t}<{inner}>"
+            return t
+        # Struct-Typ (IDENT)
+        if self.peek().type == "IDENT":
+            return self.eat("IDENT").value
+        raise SyntaxError(f"Zeile {self.peek().line}: Erwartet Typ, bekommen {self.peek().type}")
 
     def parse_block(self):
         stmts = []
@@ -181,15 +249,29 @@ class Parser:
     def parse_expr(self):
         left = self.parse_primary()
 
-        while self.peek().type == "OP":
+        # Arithmetik/Vergleiche zuerst (höhere Priorität)
+        while self.peek().type == "OP" and self.peek().value != "=":
             op = self.eat("OP").value
             right = self.parse_primary()
             left = BinOp(left, op, right)
+
+        # Zuweisung zuletzt (niedrigste Priorität)
+        if self.peek().type == "OP" and self.peek().value == "=":
+            self.eat("OP", "=")
+            right = self.parse_expr()  # rechts-assoziativ
+            return BinOp(left, "=", right)
 
         return left
 
     def parse_primary(self):
         tok = self.peek()
+
+        # Klammern: (expr)
+        if tok.type == "LPAREN":
+            self.eat("LPAREN")
+            expr = self.parse_expr()
+            self.eat("RPAREN")
+            return expr
 
         if tok.type == "NUMBER":
             self.eat("NUMBER")
@@ -201,6 +283,20 @@ class Parser:
 
         if tok.type == "IDENT":
             self.eat("IDENT")
+            # Struct literal: Token { ... }
+            if self.peek().type == "LBRACE":
+                self.eat("LBRACE")
+                fields = []
+                while self.peek().type != "RBRACE":
+                    fname = self.eat("IDENT").value
+                    self.eat("COLON")
+                    fval = self.parse_expr()
+                    fields.append((fname, fval))
+                    if self.peek().type == "COMMA":
+                        self.eat("COMMA")
+                self.eat("RBRACE")
+                return StructLit(tok.value, fields)
+            # Funktionsaufruf
             if self.peek().type == "LPAREN":
                 self.eat("LPAREN")
                 args = []
@@ -210,6 +306,17 @@ class Parser:
                         self.eat("COMMA")
                 self.eat("RPAREN")
                 return FuncCall(tok.value, args)
+            # Member access: tok.type
+            if self.peek().type == "DOT":
+                self.eat("DOT")
+                member = self.eat("IDENT").value
+                return MemberAccess(Ident(tok.value), member)
+            # Array index: arr[0]
+            if self.peek().type == "LBRACKET":
+                self.eat("LBRACKET")
+                index = self.parse_expr()
+                self.eat("RBRACKET")
+                return IndexAccess(Ident(tok.value), index)
             return Ident(tok.value)
 
         raise SyntaxError(f"Zeile {tok.line}: Unerwartetes Token {tok.type} ({tok.value!r})")
