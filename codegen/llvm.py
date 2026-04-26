@@ -83,6 +83,26 @@ entry:
               br i1 %done, label %end, label %loop
             end:
               ret i64 %i
+            }""",
+            """define i1 @streq(i8* %a, i8* %b) {
+            entry:
+              br label %loop
+            loop:
+              %i = phi i64 [ 0, %entry ], [ %i1, %loop_next ]
+              %pa = getelementptr i8, i8* %a, i64 %i
+              %pb = getelementptr i8, i8* %b, i64 %i
+              %ca = load i8, i8* %pa
+              %cb = load i8, i8* %pb
+              %eq = icmp eq i8 %ca, %cb
+              %nul = icmp eq i8 %ca, 0
+              %i1 = add i64 %i, 1
+              br i1 %nul, label %done_eq, label %loop_next
+            loop_next:
+              br i1 %eq, label %loop, label %done_neq
+            done_eq:
+              ret i1 1
+            done_neq:
+              ret i1 0
             }"""
         ]
 
@@ -225,6 +245,8 @@ entry:
             return self.gen_print(node)
         if node.name == "alloc":
             return self.gen_alloc(node)
+        if node.name == "streq":
+            return self.gen_streq(node)
 
         args = [self.gen_expr(a) for a in node.args]
         args_ir = ", ".join(f"{t} {r}" for r, t in args)
@@ -381,3 +403,10 @@ entry:
         val_reg = self.fresh()
         self.emit(f"  {val_reg} = load {elem_type}, {elem_type}* {gep_reg}")
         return (val_reg, elem_type)
+
+    def gen_streq(self, node: FuncCall) -> tuple[str, str]:
+        a_reg, _ = self.gen_expr(node.args[0])
+        b_reg, _ = self.gen_expr(node.args[1])
+        reg = self.fresh()
+        self.emit(f"  {reg} = call i1 @streq(i8* {a_reg}, i8* {b_reg})")
+        return (reg, "i1")

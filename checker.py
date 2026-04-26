@@ -6,6 +6,7 @@ BUILTINS = {
     "cast",
     "print",
     "alloc",
+    "streq",
 }
 
 # typechecker.py
@@ -102,6 +103,8 @@ class TypeChecker:
                 raise TypeError(f"Unbekannter Struct '{node.name}'")
             return node.name
 
+
+
         if isinstance(node, IndexAccess):
             obj_type = self.infer_type(node.obj)
             # ptr<i32>[i] → i32
@@ -124,6 +127,7 @@ class TypeChecker:
                 if node.name == "cast":    return "ptr<u8>"  # Platzhalter
                 if node.name == "print": return "void"
                 if node.name == "alloc": return "ptr<i32>"
+                if node.name == "streq": return "bool"
 
             if node.name not in self.funcs:
                 raise TypeError(f"Unbekannte Funktion '{node.name}'")

@@ -1,15 +1,9 @@
-def fib(n: i32) -> i32:
-    if n <= 1:
-        return n
-    return fib(n - 1) + fib(n - 2)
-
 def main() -> i32:
-    let i: i32 = 0
-    while i <= 15:
-        print("fib(")
-        print(i)
-        print(") = ")
-        print(fib(i))
-        print("\n")
-        i = i + 1
+    let a: ptr<u8> = "hello"
+    let b: ptr<u8> = "hello"
+    let c: ptr<u8> = "world"
+    if streq(a, b):
+        print("a == b\n")
+    if streq(a, c):
+        print("a == c\n")
     return 0
