@@ -192,10 +192,10 @@ cobra/
 - [x] freestanding Binary (kein libc)
 
 ### Phase 2 — Spracherweiterungen
-- [ ] `for` + `range`
-- [ ] String Vergleiche (`streq`)
-- [ ] Import System
-- [ ] `isinstance` (tagged structs)
+- [x] `for` + `range`
+- [x] String Vergleiche (`streq`)
+- [x] Import System
+- [x] `isinstance` (tagged structs)
 - [ ] Pointer Dereferenzierung (`*ptr`)
 
 ### Phase 3 — Targets
@@ -218,6 +218,7 @@ cobra/
 
 - 📧 **Email:** support-cobralabs@proton.me
 - 🐙 **GitHub:** github.com/CobraLabs
+- 🎗️ **Support:** ko-fi.com/cobralabs
 
 ---
 
